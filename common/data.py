@@ -2,6 +2,7 @@ import os
 import pickle
 import random
 import json
+import glob
 
 from deepsnap.graph import Graph as DSGraph
 from deepsnap.batch import Batch
@@ -21,6 +22,8 @@ import torch_geometric.nn as pyg_nn
 from tqdm import tqdm
 import queue
 import scipy.stats as stats
+from sklearn.preprocessing import OneHotEncoder
+
 #from ogb.nodeproppred import PygNodePropPredDataset, Evaluator
 
 from common import combined_syn
@@ -83,7 +86,8 @@ def load_dataset(name, get_feats=False):
         dataset = [g for g in nx.graph_atlas_g()[1:] if nx.is_connected(g)]
     elif name == "arxiv":
         dataset = PygNodePropPredDataset(name = "ogbn-arxiv")
-
+    elif name == 'newdataset':
+        dataset = get_newdataset("data/revit_graphs") #TODO: move path upwards
     if task == "graph":
         train_len = int(0.8 * len(dataset))
         train, test = [], []
@@ -448,6 +452,64 @@ class DiskDataSource(DataSource):
         neg_b = utils.batch_nx_graphs(neg_b, anchors=neg_b_anchors if
             self.node_anchored else None)
         return pos_a, pos_b, neg_a, neg_b
+
+
+def get_newdataset(path):
+    
+    def get_feature(dict, feature_path):
+      paths = feature_path.split('.')
+      feature = dict
+      for path in paths:
+        feature = feature[path]
+      return feature
+
+    def get_features(dict, features_paths):
+      features = []
+      for path in features_paths:
+        feature = get_feature(dict, path)
+        features.append(feature)
+      return features
+    
+    def extract_graph_properties(graph):
+        nodes_names = []
+        nodes_features = []
+        edges = {}
+        features_paths = ['grgentype', 'misc.properties.type'] #TODO: write in a file
+
+        for key, val in graph.items():
+          if key[0] != 'e': # a node
+            nodes_names.append(key)
+            features = get_features(val, features_paths)
+            nodes_features.append(features) 
+          else: # an edge
+            edges[key] = val
+
+        return nodes_names, nodes_features, edges
+
+    data = []
+    enc = OneHotEncoder(handle_unknown='ignore', sparse=False)
+
+    files = glob.glob(path + '/*')
+    for i, file in enumerate(files):
+
+        graph = json.load(open(file))
+        nodes_names, nodes_features, edges = extract_graph_properties(graph)
+        if i == 0: # fit one hot encoder on the first sample which should contain same features as all others
+            enc.fit(nodes_features)
+
+        transformed_features = enc.transform(nodes_features)
+
+        # build networkX graph
+        G = nx.Graph()
+        for name, features in zip(nodes_names, transformed_features):
+          G.add_nodes_from([(name, {'feat': features})])
+
+        for key, edge in edges.items():
+          G.add_edges_from([(edge[1], edge[2])]) #, {'feat': edge[0]})]) #TODO: Add edge features
+        data.append(G)    
+    
+    return data
+
 
 class DiskImbalancedDataSource(OTFSynDataSource):
     """ Imbalanced on-the-fly real data.
