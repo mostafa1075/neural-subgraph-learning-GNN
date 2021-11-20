@@ -87,7 +87,7 @@ def make_data_source(args):
                 edge_induced=args.edge_induced)
         elif toks[1] == "imbalanced":
             data_source = data.DiskImbalancedDataSource(toks[0],
-                node_anchored=args.node_anchored)
+                node_anchored=args.node_anchored, max_size=5, min_size=2)
         else:
             raise Exception("Error: unrecognized dataset")
     return data_source

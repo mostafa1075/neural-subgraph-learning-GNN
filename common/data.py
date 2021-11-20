@@ -383,7 +383,7 @@ class DiskDataSource(DataSource):
         loaders = [[batch_size]*(size // batch_size) for i in range(3)]
         return loaders
 
-    def gen_batch(self, a, b, c, train, max_size=50, min_size=5, seed=None,
+    def gen_batch(self, a, b, c, train, max_size=5, min_size=2, seed=None,
         filter_negs=False, sample_method="tree-pair", epoch=None):
         
         sample_method = self.sampling_method
